@@ -9,6 +9,8 @@ bl_info = {
 }
 
 import bpy
+from bpy_extras.io_utils import ImportHelper, ExportHelper
+import csv
 
 class MappingPairProperty(bpy.types.PropertyGroup):
     src: bpy.props.StringProperty(name="src")
@@ -38,7 +40,7 @@ class VertexGroupRenamerProperties(bpy.types.PropertyGroup):
         )
     mapping_active_index: bpy.props.IntProperty()
 
-class VertexGroupRenamer_UL_MappingPair(bpy.types.UIList):
+class VERTEX_GROUP_RENAMER_UL_MappingPair(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index, flt_flag):
         enable = (flt_flag & self.bitflag_filter_item)
         if self.use_filter_invert:
@@ -65,15 +67,15 @@ class VertexGroupRenamer_UL_MappingPair(bpy.types.UIList):
 
         return flt_flags, flt_neworder
 
-class MappingCollection_OT_Add(bpy.types.Operator):
-    bl_idname = "mapping_collection.add"
+class VERTEX_GROUP_RENAMER_OT_MappingCollection_Add(bpy.types.Operator):
+    bl_idname = "vertex_group_renamer.mapping_collection_add"
     bl_label = "add mapping_pair to collection"
     def execute(self, context):
         context.scene.VertexGroupRenamerProperty.mapping_collection.add()
         return {"FINISHED"}
 
-class MappingCollection_OT_Remove(bpy.types.Operator):
-    bl_idname = "mapping_collection.remove"
+class VERTEX_GROUP_RENAMER_OT_MappingCollection_Remove(bpy.types.Operator):
+    bl_idname = "vertex_group_renamer.mapping_collection_remove"
     bl_label = "remove mapping_pair from collection"
     def execute(self, context):
         props = context.scene.VertexGroupRenamerProperty
@@ -83,8 +85,8 @@ class MappingCollection_OT_Remove(bpy.types.Operator):
         active_index = min(active_index, len(mapping_collection)-1)
         return {"FINISHED"}
 
-class MappingCollection_OT_Clear(bpy.types.Operator):
-    bl_idname = "mapping_collection.clear"
+class VERTEX_GROUP_RENAMER_OT_MappingCollection_Clear(bpy.types.Operator):
+    bl_idname = "vertex_group_renamer.mapping_collection_clear"
     bl_label = "clear mapping collection"
     def execute(self, context):
         props = context.scene.VertexGroupRenamerProperty
@@ -92,8 +94,54 @@ class MappingCollection_OT_Clear(bpy.types.Operator):
         mapping_collection.clear()
         return {"FINISHED"}
 
-class VertexGroupRenamePanel(bpy.types.Panel):
-    bl_idname = "OBJECT_PT_vertex_group_rename_panel"
+class VERTEX_GROUP_RENAMER_OT_MappingCollection_Import(bpy.types.Operator, ImportHelper):
+    bl_idname = "vertex_group_renamer.mapping_collection_import"
+    bl_label = "import mapping from csv"
+    filter_glob: bpy.props.StringProperty(
+        default="*.csv",
+        options={"HIDDEN"},
+    )
+    def execute(self, context):
+        props = context.scene.VertexGroupRenamerProperty
+        mapping_collection = props.mapping_collection
+        mapping_collection.clear()
+        with open(self.filepath, "r", encoding="utf-8", newline="") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                pair = mapping_collection.add()
+                pair.src = row[0]
+                pair.dst = row[1]
+        return {"FINISHED"}
+
+class VERTEX_GROUP_RENAMER_OT_MappingCollection_Export(bpy.types.Operator, ExportHelper):
+    bl_idname = "vertex_group_renamer.mapping_collection_export"
+    bl_label = "export mapping to csv"
+    filename_ext = ".csv"
+    filter_glob: bpy.props.StringProperty(
+        default="*.csv",
+        options={"HIDDEN"},
+    )
+    def execute(self, context):
+        props = context.scene.VertexGroupRenamerProperty
+        mapping_collection = props.mapping_collection
+        with open(self.filepath, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            for pair in mapping_collection:
+                writer.writerow((pair.src, pair.dst))
+        return {"FINISHED"}
+
+class VERTEX_GROUP_RENAMER_MT_MappingCollection_Special(bpy.types.Menu):
+    bl_idname = "VERTEX_GROUP_RENAMER_MT_mapping_collection_special"
+    bl_label = "mapping collection's menu"
+    def draw(self, context):
+        layout = self.layout
+        layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Clear.bl_idname, text="Clear", icon="TRASH")
+        layout.separator()
+        layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Import.bl_idname, text="import from csv")
+        layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Export.bl_idname, text="export to csv")
+
+class VERTEX_GROUP_RENAMER_PT_ToolShelf(bpy.types.Panel):
+    bl_idname = "VERTEX_GROUP_RENAMER_PT_tool_shelf"
     bl_label = "VertexGroup Renamer"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -107,21 +155,23 @@ class VertexGroupRenamePanel(bpy.types.Panel):
         layout.prop(props, "armature_source")
         layout.prop(props, "armature_target")
         layout.prop(props, "bone_max_distance")
-        layout.operator(VertexGroupRenamer_OT_GetMappingFromArmaturePair.bl_idname, text="Get Mapping from Armature")
+        layout.operator(VERTEX_GROUP_RENAMER_OT_GetMappingFromArmaturePair.bl_idname, text="Get Mapping from Armature")
         layout.separator()
 
         layout.label(text="Mapping Pair")
         row = layout.row()
-        row.template_list("VertexGroupRenamer_UL_MappingPair", "", props, "mapping_collection", props, "mapping_active_index")
-        col = row.column()
-        col.operator(MappingCollection_OT_Add.bl_idname, text="", icon="ADD")
-        col.operator(MappingCollection_OT_Remove.bl_idname, text="", icon="REMOVE")
-        col.operator(MappingCollection_OT_Clear.bl_idname, text="", icon="TRASH")
+        row.template_list(VERTEX_GROUP_RENAMER_UL_MappingPair.__name__, "", props, "mapping_collection", props, "mapping_active_index")
+        side = row.column()
+        col = side.column(align=True)
+        col.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Add.bl_idname, text="", icon="ADD")
+        col.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Remove.bl_idname, text="", icon="REMOVE")
+        side.separator()
+        side.menu(VERTEX_GROUP_RENAMER_MT_MappingCollection_Special.bl_idname, text="", icon="DOWNARROW_HLT")
         
         layout.separator()
-        layout.operator(VertexGroupRenamer_OT_Rename.bl_idname, text="Rename VertexGroup")
+        layout.operator(VERTEX_GROUP_RENAMER_OT_Rename.bl_idname, text="Rename VertexGroup")
 
-class VertexGroupRenamer_OT_GetMappingFromArmaturePair(bpy.types.Operator):
+class VERTEX_GROUP_RENAMER_OT_GetMappingFromArmaturePair(bpy.types.Operator):
     bl_idname = "vertex_group_renamer.get_mapping_from_armature_pair"
     bl_label = "get mapping from armature pair"
     bl_description = "get mapping from armature pair."
@@ -140,8 +190,6 @@ class VertexGroupRenamer_OT_GetMappingFromArmaturePair(bpy.types.Operator):
         
         matrix_world_src = armature_src.matrix_world
         matrix_world_dst = armature_dst.matrix_world
-        print(matrix_world_src)
-        print(matrix_world_dst)
 
         # マッピング情報を取得
         bone_mapping = {}
@@ -167,7 +215,6 @@ class VertexGroupRenamer_OT_GetMappingFromArmaturePair(bpy.types.Operator):
                     src_pos = matrix_world_src @ bone_src.head_local
                     dst_pos = matrix_world_dst @ bone_trg.head_local
                     distance = (src_pos - dst_pos).length
-                    print(bone_src.name, bone_trg.name, src_pos, dst_pos, distance)
                     if (distance <= bone_max_distance) and ((minimum_distance is None) or (minimum_distance > distance)):
                         minimum_distance = distance
                         mapped_bone = bone_trg
@@ -187,7 +234,7 @@ class VertexGroupRenamer_OT_GetMappingFromArmaturePair(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class VertexGroupRenamer_OT_Rename(bpy.types.Operator):
+class VERTEX_GROUP_RENAMER_OT_Rename(bpy.types.Operator):
     bl_idname = "vertex_group_renamer.rename"
     bl_label = "Rename VertexGroup"
     bl_description = "Rename VertexGroup with mapping."
@@ -212,14 +259,17 @@ class VertexGroupRenamer_OT_Rename(bpy.types.Operator):
 
 classes = [
     MappingPairProperty,
-    MappingCollection_OT_Add,
-    MappingCollection_OT_Remove,
-    MappingCollection_OT_Clear,
     VertexGroupRenamerProperties,
-    VertexGroupRenamer_UL_MappingPair,
-    VertexGroupRenamer_OT_Rename,
-    VertexGroupRenamer_OT_GetMappingFromArmaturePair,
-    VertexGroupRenamePanel,
+    VERTEX_GROUP_RENAMER_OT_MappingCollection_Add,
+    VERTEX_GROUP_RENAMER_OT_MappingCollection_Remove,
+    VERTEX_GROUP_RENAMER_OT_MappingCollection_Clear,
+    VERTEX_GROUP_RENAMER_OT_MappingCollection_Import,
+    VERTEX_GROUP_RENAMER_OT_MappingCollection_Export,
+    VERTEX_GROUP_RENAMER_MT_MappingCollection_Special,
+    VERTEX_GROUP_RENAMER_UL_MappingPair,
+    VERTEX_GROUP_RENAMER_OT_Rename,
+    VERTEX_GROUP_RENAMER_OT_GetMappingFromArmaturePair,
+    VERTEX_GROUP_RENAMER_PT_ToolShelf,
 ]
 
 def register():

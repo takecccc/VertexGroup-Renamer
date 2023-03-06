@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VertexGroup Renamer",
     "author": "takec",
-    "version": (1, 0),
+    "version": (1, 1),
     "blender": (3, 4, 0),
     "location": "View3D > Tool Shelf > Renamer > VertexGroup Renamer",
     "description": "Renames vertex groups based on bone mappings",

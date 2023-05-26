@@ -44,11 +44,24 @@ class VertexGroupRenamerProperties(bpy.types.PropertyGroup):
 
 
 class VERTEX_GROUP_RENAMER_UL_MappingPair(bpy.types.UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index, flt_flag):
+    def draw_item(self,
+                  context,
+                  layout:bpy.types.UILayout,
+                  data,
+                  item,
+                  icon,
+                  active_data,
+                  active_peoperty,
+                  index,
+                  flt_flag):
         enable = (flt_flag & self.bitflag_filter_item)
         if self.use_filter_invert:
             enable = not enable
         if enable:
+            if item["src"] == item["dst"]:
+                layout.label(icon="CHECKMARK")
+            else:
+                layout.label(icon="BLANK1")
             layout.prop(item, "src", text="", emboss=False, translate=False)
             layout.prop(item, "dst", text="", emboss=False, translate=False)
 

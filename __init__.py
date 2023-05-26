@@ -21,11 +21,13 @@ class MappingPairProperty(bpy.types.PropertyGroup):
 class VertexGroupRenamerProperties(bpy.types.PropertyGroup):
     armature_source: bpy.props.PointerProperty(
         name="src",
-        type=bpy.types.Armature,
+        type=bpy.types.Object,
+        poll=lambda self, obj: obj.type == "ARMATURE"
     )
     armature_target: bpy.props.PointerProperty(
         name="trg",
-        type=bpy.types.Armature,
+        type=bpy.types.Object,
+        poll=lambda self, obj: obj.type == "ARMATURE"
     )
     bone_max_distance: bpy.props.FloatProperty(
         name="max distance",
@@ -268,11 +270,28 @@ class VERTEX_GROUP_RENAMER_OT_Rename(bpy.types.Operator):
         # 選択したMeshのVertex Group名を変更
         for obj in bpy.context.selected_objects:
             if obj.type == "MESH":
-                for vg in obj.vertex_groups:
-                    if vg.name in mapping:
-                        mapped_name = mapping[vg.name]
-                        if mapped_name != "":
-                            vg.name = mapped_name
+                vg_name_list = [vg.name for vg in obj.vertex_groups]
+                for src_name in vg_name_list:
+                    if src_name not in mapping:
+                        continue
+                    dst_name = mapping[src_name]
+                    if (dst_name == "") or (src_name == dst_name):
+                        continue
+                    if dst_name in [vg.name for vg in obj.vertex_groups]:
+                        # add weight to dst and delete src
+                        src_vg = obj.vertex_groups[src_name]
+                        dst_vg = obj.vertex_groups[dst_name]
+                        for v in obj.data.vertices:
+                            try:
+                                weight = src_vg.weight(v.index)
+                                dst_vg.add([v.index], weight, "ADD")
+                            except RuntimeError:
+                                pass
+                        obj.vertex_groups.remove(src_vg)
+                    else:
+                        # rename
+                        src_vg = obj.vertex_groups[src_name]
+                        src_vg.name = dst_name
 
         return {"FINISHED"}
 

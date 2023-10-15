@@ -16,7 +16,7 @@ bl_info = {
 class MappingPairProperty(bpy.types.PropertyGroup):
     src: bpy.props.StringProperty(name="src")
     dst: bpy.props.StringProperty(name="dst")
-
+    locked: bpy.props.BoolProperty(name="locked", default=False)
 
 class VertexGroupRenamerProperties(bpy.types.PropertyGroup):
     armature_source: bpy.props.PointerProperty(
@@ -64,6 +64,8 @@ class VERTEX_GROUP_RENAMER_UL_MappingPair(bpy.types.UIList):
                 layout.label(icon="BLANK1")
             layout.prop(item, "src", text="", emboss=False, translate=False)
             layout.prop(item, "dst", text="", emboss=False, translate=False)
+            icon = "LOCKED" if item.locked else "UNLOCKED"
+            layout.prop(item, "locked", text="", icon=icon, emboss=False)
 
     def filter_items(self, context, data, propname):
         items = getattr(data, propname)
@@ -104,17 +106,22 @@ class VERTEX_GROUP_RENAMER_OT_MappingCollection_Remove(bpy.types.Operator):
         active_index = min(active_index, len(mapping_collection) - 1)
         return {"FINISHED"}
 
-
 class VERTEX_GROUP_RENAMER_OT_MappingCollection_Clear(bpy.types.Operator):
     bl_idname = "vertex_group_renamer.mapping_collection_clear"
     bl_label = "clear mapping collection"
 
+    unlocked_only: bpy.props.BoolProperty(name="locked", default=False)
+
     def execute(self, context):
         props = context.scene.VertexGroupRenamerProperty
         mapping_collection = props.mapping_collection
-        mapping_collection.clear()
+        if not self.unlocked_only:
+            mapping_collection.clear()
+        else:
+            unlocked_indices = [i for i, item in enumerate(mapping_collection) if not item.locked]
+            for index in reversed(unlocked_indices):
+                mapping_collection.remove(index)
         return {"FINISHED"}
-
 
 class VERTEX_GROUP_RENAMER_OT_MappingCollection_Import(bpy.types.Operator, ImportHelper):
     bl_idname = "vertex_group_renamer.mapping_collection_import"
@@ -162,7 +169,10 @@ class VERTEX_GROUP_RENAMER_MT_MappingCollection_Special(bpy.types.Menu):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Clear.bl_idname, text="Clear", icon="TRASH")
+        op = layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Clear.bl_idname, text="Clear All", icon="TRASH")
+        op.unlocked_only = False
+        op = layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Clear.bl_idname, text="Clear Unlocked", icon="TRASH")
+        op.unlocked_only = True
         layout.separator()
         layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Import.bl_idname, text="import from csv")
         layout.operator(VERTEX_GROUP_RENAMER_OT_MappingCollection_Export.bl_idname, text="export to csv")
